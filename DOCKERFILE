@@ -1,0 +1,24 @@
+FROM python:3.9
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y mysql-client dnsutils
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the source code
+COPY . .
+
+# Set environment variables
+ENV TELEGRAM_TOKEN=<your_telegram_token>
+ENV DB_USER=<your_db_user>
+ENV DB_PASSWORD=<your_db_password>
+ENV DB_HOST=<your_db_host>
+ENV DB_NAME=<your_db_name>
+ENV DNS_IP=<your_dns_ip>
+ENV FIREWALL_IP=<your_firewall_ip>
+ENV NAS_IP=<your_nas_ip>
+
+# Run the Telegram bot
+CMD ["python", "bot.py"]
