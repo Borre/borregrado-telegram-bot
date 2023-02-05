@@ -1,11 +1,13 @@
+import datetime
+import logging
 import os
+from typing import Dict
 
 from dotenv import load_dotenv
-from telegram import (ForceReply, InlineKeyboardButton, InlineKeyboardMarkup,
+from telegram import (ForceReply, ReplyKeyboardMarkup, ReplyKeyboardRemove,
                       Update)
-from telegram.ext import (Application, CallbackContext, CallbackQueryHandler,
-                          CommandHandler, ContextTypes, MessageHandler,
-                          filters)
+from telegram.ext import (Application, CommandHandler, ContextTypes,
+                          ConversationHandler, MessageHandler, filters)
 from telegram.ext.filters import User
 
 import check_script
@@ -13,11 +15,29 @@ import models
 
 load_dotenv()
 
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+
 # Replace with your Telegram bot token
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 authorized_user_id_1 = int(os.environ["AUTHORIZED_USER_ID_1"])
 authorized_user_id_2 = int(os.environ["AUTHORIZED_USER_ID_2"])
 ALLOWED_IDS = [authorized_user_id_1, authorized_user_id_2]
+
+
+CHOOSING, TYPING_REPLY, TYPING_CHOICE = range(3)
+
+reply_keyboard = [
+    ["Pee", "Poop"],
+    ["Sleep", "Eat"],
+    ["Done"],
+]
+
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 
 
 async def check_command(update, context):
@@ -49,55 +69,80 @@ async def check_command(update, context):
         "Internet: " + internet + "\nDNS: " + dns + "\nFirewall: " + firewall + "\nNAS: " + nas + "\nInternet Information: " + ifconfig_me)
 
 
-async def ana_command(update: Update, context: CallbackContext):
+async def ana_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Check if the user is authorized
     if update.message.from_user.id not in [authorized_user_id_1, authorized_user_id_2]:
         await update.message.reply_text(
             "You are not authorized to use this command.")
         return
     else:
-        options = ["Poop", "Pee", "Eat", "Sleep"]
-        keyboard = []
-        for option in options:
-            button = InlineKeyboardButton(option, callback_data=option)
-            keyboard.append([button])
-        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            "Please select an option:", reply_markup=reply_markup)
+            "Hi! This is Borregrado bot, I will help you to keep track of your Ana's activities.\n\n"
+            "Send /cancel to stop talking to me.\n\n"
+            "What do you want to register?",
+            reply_markup=markup
+        )
+        return CHOOSING
 
 
-def ana_menu(update: Update, context: CallbackContext):
-    query = update.callback_query
-    option = query.data
-    if option == "Poop":
-        models.ana_save_to_database(poop=True)
-    elif option == "Pee":
-        models.ana_save_to_database(pee=True)
-    elif option == "Eat":
-        if update.message:
-            print("Update variable is here")
-            ana_eat_command(update, context)
-            update.message.reply_text("Please select an option for {}:".format(
-                "eat"))
-        else:
-            print("Update variable is None")
-    elif option == "Sleep":
-        models.ana_save_to_database(sleep=True)
-        query.answer(text=f"You selected: {option}")
+async def regular_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text
+    if text.lower() == "pee":
+        context.user_data["pee"] = True
+    elif text.lower() == "poop":
+        context.user_data["poop"] = True
+    await update.message.reply_text(f"Ana {text.lower()}? I will remember that! \n What else do you want to register?",
+                                    reply_markup=markup)
+    return CHOOSING
 
 
-def ana_eat_command(update: Update, context: CallbackContext):
-    print("ana_eat_command")
-    options = ["1 Breast", "Both Breast", "Formula 1 oz", "Formula 2 oz"]
-    keyboard = []
-    for option in options:
-        button = InlineKeyboardButton(option, callback_data=option)
-        keyboard.append([button])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("Please select an option for {}:".format(
-        option), reply_markup=reply_markup)
+async def custom_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text
+    if text.lower() == "sleep":
+        context.user_data["sleep"] = True
+        context.user_data["sleep_time"] = 0
+        context.user_data["eat"] = False
+        await update.message.reply_text(
+            'Alright, how much time Ana sleept? Please enter it in hours.',
+        )
+    elif text.lower() == "eat":
+        context.user_data["sleep"] = False
+        context.user_data["sleep_time"] = 0
+        context.user_data["eat"] = True
+        await update.message.reply_text(
+            'Alright, how much Ana ate? One or both breast?".',
+        )
 
-# Telegram bot
+    return TYPING_REPLY
+
+
+async def received_information(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_data = context.user_data
+    text = update.message.text
+    if user_data["sleep"] == True & user_data["sleep_time"] == 0:
+        user_data["sleep_time"] = text
+    elif user_data["eat"] == True:
+        user_data["eat_quality"] = text
+    await update.message.reply_text(
+        "Something else?",
+        reply_markup=markup,
+    )
+
+    return CHOOSING
+
+
+async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_data = context.user_data
+    if "choice" in user_data:
+        del user_data["choice"]
+
+    await update.message.reply_text(
+        "Until next time!",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+    user_data.clear()
+    return ConversationHandler.END
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -112,10 +157,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text("Help!")
 
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(update.message.text)
-
-
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
@@ -126,14 +167,36 @@ def main() -> None:
     application.add_handler(CommandHandler(
         "check", check_command, filters=User(ALLOWED_IDS)))
 
-    application.add_handler(CommandHandler(
-        "ana", ana_command, filters=User(ALLOWED_IDS)))
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("ana", ana_command)],
+        states={
+            CHOOSING: [
+                MessageHandler(
+                    filters.Regex(
+                        "^(Pee|Poop)$"), regular_choice
+                ),
+                MessageHandler(filters.Regex(
+                    "^(Eat|Sleep)$"), custom_choice),
+            ],
+            TYPING_CHOICE: [
+                MessageHandler(
+                    filters.TEXT & ~(filters.COMMAND | filters.Regex(
+                        "^Done$")), regular_choice
+                )
+            ],
+            TYPING_REPLY: [
+                MessageHandler(
+                    filters.TEXT & ~(filters.COMMAND |
+                                     filters.Regex("^Done$")),
+                    received_information,
+                )
+            ],
+        },
+        fallbacks=[MessageHandler(filters.Regex("^Done$"), done)],
+    )
 
-    application.add_handler(CallbackQueryHandler(
-        ana_menu(Update, CallbackContext)))
+    application.add_handler(conv_handler)
 
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND, echo))
     application.run_polling()
 
 
