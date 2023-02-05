@@ -1,7 +1,9 @@
-import datetime
 import os
+import datetime
+from datetime import timedelta
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine
+from sqlalchemy import (Boolean, Column, DateTime, Integer, String,
+                        create_engine)
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Get MariaDB connection details from environment variables
@@ -32,7 +34,7 @@ class AnaReport(Base):
     __tablename__ = "ana_report"
 
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    pop = Column(Boolean, nullable=False, default=False)
+    poop = Column(Boolean, nullable=False, default=False)
     pee = Column(Boolean, nullable=False, default=False)
     eat = Column(Boolean, nullable=False, default=False)
     eat_quality = Column(Integer, nullable=True, default=0)
@@ -94,3 +96,59 @@ def ana_save_to_database(poop, pee, eat, eat_quality, sleep_time):
 
     # Close the session
     session.close()
+
+
+def ana_report():
+    # Get a new session
+    session = SessionLocal()
+
+    # Query the database
+    results = session.query(AnaReport).all()
+
+    # Close the session
+    session.close()
+
+    return results
+
+
+def ana_create_report():
+    # Get a new session
+    session = SessionLocal()
+
+    # Query the database
+    data = session.query(AnaReport).filter(AnaReport.created_at >= (
+        datetime.datetime.now() - datetime.timedelta(days=1))).all()
+
+    # Close the session
+    session.close()
+
+    # Initialize variables to keep track of the count and sum of values
+    poop_count = pee_count = eat_count = 0
+    sleep_time = 0
+    eat_quality = 0
+    last_poop = last_pee = last_eat = last_sleep = "Never happened."
+
+    # Loop over the list of objects and retrieve the necessary data
+    for report in data:
+        if report.poop:
+            poop_count += 1
+            last_poop = report.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        if report.pee:
+            pee_count += 1
+            last_pee = report.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        sleep_time += report.sleep_time
+        if report.eat:
+            eat_count += 1
+            eat_quality += report.eat_quality
+            last_eat = report.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        if report.sleep_time:
+            last_sleep = report.created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Format the results string
+    results = (f"In the last 24 hours, Ana has: \n"
+               f"- Pooped {poop_count} times (Last at: {last_poop})\n"
+               f"- Peed {pee_count} times (Last at: {last_pee})\n"
+               f"- Slept for {sleep_time} hours (Last at: {last_sleep})\n"
+               f"- Eaten {eat_count} times (Last at: {last_eat})\n"
+               f"- She has eaten in both breasts {eat_quality/2} times.")
+    return results

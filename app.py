@@ -1,4 +1,3 @@
-import datetime
 import logging
 import os
 from typing import Dict
@@ -119,10 +118,11 @@ async def custom_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def received_information(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = context.user_data
     text = update.message.text
-    if user_data["sleep"] == True & user_data["sleep_time"] == 0:
-        user_data["sleep_time"] = text
+    if user_data["sleep"] == True:
+        user_data["sleep_time"] = text if user_data["sleep_time"] == 0 else user_data["sleep_time"]
     elif user_data["eat"] == True:
         user_data["eat_quality"] = text
+
     await update.message.reply_text(
         "Something else?",
         reply_markup=markup,
@@ -133,8 +133,15 @@ async def received_information(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = context.user_data
-    if "choice" in user_data:
-        del user_data["choice"]
+    poop = user_data.get("poop", False)
+    pee = user_data.get("pee", False)
+    eat = user_data.get("eat", False)
+    eat_quality = user_data.get("eat_quality", 0)
+    sleep_time = user_data.get("sleep_time", 0)
+
+    models.ana_save_to_database(
+        poop=poop, pee=pee, eat=eat, eat_quality=eat_quality, sleep_time=sleep_time
+    )
 
     await update.message.reply_text(
         "Until next time!",
@@ -153,6 +160,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def ana_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Check if the user is authorized
+    if update.message.from_user.id not in [authorized_user_id_1, authorized_user_id_2]:
+        await update.message.reply_text(
+            "You are not authorized to use this command.")
+        return
+    else:
+        report = models.ana_create_report()
+        await update.message.reply_text(report)
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Help!")
 
@@ -166,6 +184,9 @@ def main() -> None:
         "help", help_command, filters=User(ALLOWED_IDS)))
     application.add_handler(CommandHandler(
         "check", check_command, filters=User(ALLOWED_IDS)))
+
+    application.add_handler(CommandHandler(
+        "report", ana_report, filters=User(ALLOWED_IDS)))
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("ana", ana_command)],
