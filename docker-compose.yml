@@ -4,5 +4,5 @@ services:
     image: swr.la-north-2.myhuaweicloud.com/eduardo/borregrado-telegram-bot:latest
     container_name: borregrado-telegram-bot
     env_file:
-      - myenv.env
+      - .env
     restart: unless-stopped
