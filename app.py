@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Dict
 
 from dotenv import load_dotenv
 from telegram import (ForceReply, ReplyKeyboardMarkup, ReplyKeyboardRemove,
@@ -39,7 +38,7 @@ reply_keyboard = [
 markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 
 
-async def check_command(update, context):
+async def check_command(update):
     # Check if the user is authorized
     if update.message.from_user.id not in [authorized_user_id_1, authorized_user_id_2]:
         await update.message.reply_text(

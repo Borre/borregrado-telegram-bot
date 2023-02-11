@@ -1,8 +1,7 @@
-FROM python:3.9
+FROM python:3.9-alpine
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y mariadb-client dnsutils
-
+RUN apk update && apk add gcc musl-dev mariadb-connector-c-dev bind-tools
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -10,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the source code
 COPY . .
 
-USER daemon
+USER telegram
 
 # Run the Telegram bot
 CMD ["python", "app.py"]
